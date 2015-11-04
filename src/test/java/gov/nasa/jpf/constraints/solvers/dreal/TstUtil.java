@@ -16,8 +16,7 @@
 package gov.nasa.jpf.constraints.solvers.dreal;
 
 import java.util.Properties;
-
-import org.testng.Reporter;
+import java.util.logging.Logger;
 
 import junit.framework.Assert;
 import gov.nasa.jpf.constraints.api.ConstraintSolver;
@@ -29,44 +28,44 @@ import gov.nasa.jpf.constraints.solvers.ConstraintSolverFactory;
 
 public class TstUtil {
 
+  private static final Logger log = Logger.getLogger(TstUtil.class.getName());
+  
 	public static final boolean PRINT_DREAL_EXPR = true;
-	
-	
 	
 	public static DrealSolver createDrealSolver(Properties conf) {
 		conf.setProperty("symbolic.dp", "dreal");
-		conf.setProperty("dreal.path", "dReal");
+		conf.setProperty("dreal.path", "/Users/luckow/programs/dreal/bin/dReal");
 		ConstraintSolverFactory factory = new ConstraintSolverFactory(conf);
 		ConstraintSolver solver = factory.createSolver();
 		return (DrealSolver) solver;
 	}
 	
 	public static Valuation runTest(ConstraintSolver solver, Expression<Boolean> expr, Result expectedRes, boolean printCoralExpr) {
-		Reporter.log("Expr: " + expr.toString(), true);
+	  log.info("Expr: " + expr.toString());
 		try {
 			if(printCoralExpr) {
 				DrealExpressionGenerator expGen = new DrealExpressionGenerator();
 				String constraint = expGen.generateAssertion(expr);
-				Reporter.log("dReal Expr: " + constraint.toString(), true);
+				log.info("dReal Expr: " + constraint.toString());
 			}
 			Valuation val = new Valuation();
 			long start = System.currentTimeMillis();
 	        Result res = solver.solve(expr, val);
 	        long solverTime = (System.currentTimeMillis() - start);
-	        Reporter.log("Solver time: " + solverTime + "ms", true);
-	        Reporter.log("Expected " + expectedRes + " got " + res, true);
+	        log.info("Solver time: " + solverTime + "ms");
+	        log.info("Expected " + expectedRes + " got " + res);
 	        if(res == Result.SAT) {
-	        	Reporter.log("-------Valuation-------", true);
+	          log.info("-------Valuation-------");
 		        for(ValuationEntry<?> exp : val)
-		        	Reporter.log(exp.getVariable() + "=" + exp.getValue(), true);
-		        Reporter.log("-----------------------", true);
+		          log.info(exp.getVariable() + "=" + exp.getValue());
+		        log.info("-----------------------");
 	        }
 	        Assert.assertEquals(expectedRes, res);
 	        return val;
 		} catch(Exception e) {
 			throw e;
 		} finally {
-			Reporter.log("======================================================================", true);
+		  log.info("======================================================================");
 		}
 	}
 

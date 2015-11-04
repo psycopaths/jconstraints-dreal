@@ -29,9 +29,8 @@ import gov.nasa.jpf.constraints.expressions.functions.math.UnaryDoubleFunction;
 import gov.nasa.jpf.constraints.types.BuiltinTypes;
 import java.util.Properties;
 
-import org.testng.annotations.Test;
+import org.junit.Test;
 
-@Test
 public class TrigonometricTest {
 
   public static void main(String[] args) {
