@@ -23,6 +23,7 @@ import java.io.OutputStream;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Scanner;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -112,9 +113,16 @@ public class DrealSolver extends ConstraintSolver {
   
   private void setValuation(Collection<Variable<?>> vars, DrealResult drealRes, Valuation res) {
     for(Variable<?> var : vars) {
-      Interval val = drealRes.getValuation(var.getName()).getValuation();
-      Double concVal = this.valSelector.getValue(val);
-      res.setParsedValue(var, concVal.toString());
+      DrealValuationResult drealVal = drealRes.getValuation(var.getName());
+      // drealVal can be null if the variable can be set to an arbitrary value
+      // This is e.g. the case if for superfluous variable or in cases where a variable is x * 0
+      //and does not appear anywhere else in the formula
+      double concVal = 0.0;
+      if(drealVal != null) { 
+        Interval val = drealVal.getValuation();
+        concVal = this.valSelector.getValue(val);
+      }
+      res.setParsedValue(var, ""+concVal);
     }
   }
  
@@ -122,9 +130,7 @@ public class DrealSolver extends ConstraintSolver {
     Process dreal = null;
     DrealResult drealRes = null;
     try {
-      List<String> args = new LinkedList<>();
-      args.add("-verbose");
-      ProcessBuilder builder = new ProcessBuilder(drealPath, "-verbose");
+      ProcessBuilder builder = new ProcessBuilder(drealPath,  "--model", "--in");
       builder.redirectErrorStream(true);
       dreal = builder.start();
       OutputStream out = dreal.getOutputStream();
@@ -146,7 +152,12 @@ public class DrealSolver extends ConstraintSolver {
     return drealRes;
   }
   
-  private static Pattern valuationPattern =  Pattern.compile("\\s*([a-zA-Z0-9]+)\\s*:\\s*[\\[\\(]+([-0-9\\.e+-]+|-?inf),\\s*([-0-9\\.e+-]+|-?inf)[\\]\\)]+");
+  /*
+   * matches:
+   *  x : [ ENTIRE ] = [ -INFTY ]
+   *  y : [ ENTIRE ] = [-8.200000000000001, -8.199023437500001]
+   */
+  private static Pattern valuationPattern =  Pattern.compile("\\s*([a-zA-Z0-9]+)\\s*:\\s*\\[[a-zA-Z0-9\\s]*\\]\\s*=\\s*[\\[\\(]+([-0-9\\.e+-]+|\\s*-INFTY\\s*)\\s*,?\\s*([-0-9\\.e+-]+|\\s*-INFTY\\s)?\\s*[\\]\\)]+");
   
   private static class DrealResultParser implements Runnable {
     private InputStream in;
@@ -172,35 +183,52 @@ public class DrealSolver extends ConstraintSolver {
 
           if(matcher.find()) {
             System.out.println("match " + matcher.group(0));
-
+            System.out.println("val " + matcher.group(1));
             String varName = matcher.group(1);
-            double vs = getDoubleFromStr(matcher.group(2));
-            double ve = getDoubleFromStr(matcher.group(3));
+            double vs = getDoubleFromStr(matcher.group(2).trim());
+            double ve;
+            if(Double.isInfinite(vs))
+            	ve = vs;
+            else
+            	ve = getDoubleFromStr(matcher.group(3));
             valuations.add(new DrealValuationResult(varName, vs, ve));
           }
           prevLine = line;
         }
         Result jConstraintsResult = null;
         //TODO: Not the most robust way of parsing the result
-        if(prevLine.equals("sat"))
+        if(prevLine.startsWith("delta-sat")) {
           jConstraintsResult = Result.SAT;
-        else if(prevLine.equals("unsat"))
-          jConstraintsResult = Result.UNSAT;
-        else if(prevLine.equals("unknown"))
-          jConstraintsResult = Result.DONT_KNOW;
-        else
-          throw new DrealSolverException("Failed to parse dReal final result: " + prevLine);
+          double delta = getDelta(prevLine);
+          result = new DrealResult(jConstraintsResult, valuations, delta);
+        } else {
+          if(prevLine.equals("unsat"))
+            jConstraintsResult = Result.UNSAT;
+          else if(prevLine.equals("unknown"))
+            jConstraintsResult = Result.DONT_KNOW;
+          else 
+            throw new DrealSolverException("Failed to parse dReal final result: " + prevLine);
+          result = new DrealResult(jConstraintsResult);
+        }
         in.close();
-        result = new DrealResult(jConstraintsResult, valuations);
       } catch (IOException e) {
         throw new DrealSolverException(e);
       }
     }
-    
+
+    private double getDelta(String deltaSatResult) {
+      Pattern p = Pattern.compile("(\\d+(?:\\.\\d+))");
+      Matcher m = p.matcher(deltaSatResult);
+      double delta = Double.NaN;
+      if(m.find())
+        delta = Double.parseDouble(m.group(1));
+      return delta;
+    }
+
     private double getDoubleFromStr(String d) {
-      if(d.equals("-inf"))
+      if(d.equals("-INFTY"))
         return Double.NEGATIVE_INFINITY;
-      else if(d.equals("inf"))
+      else if(d.equals("INFTY"))
         return Double.POSITIVE_INFINITY;
       else
         return Double.parseDouble(d);

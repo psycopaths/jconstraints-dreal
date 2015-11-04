@@ -23,18 +23,24 @@ public class DrealResult {
   
   private final Result result;
   private List<DrealValuationResult> valuations;
+  private double delta = -1;
   
   public DrealResult(Result result) {
     this.result = result;
   }
   
-  public DrealResult(Result result, List<DrealValuationResult> valuations) {
+  public DrealResult(Result result, List<DrealValuationResult> valuations, double delta) {
     this.result = result;
     this.valuations = valuations;
+    this.delta = delta;
   }
-  
+
   public List<DrealValuationResult> getValuations() {
     return this.valuations;
+  }
+  
+  public double getDelta() {
+	  return this.delta;
   }
   
   public DrealValuationResult getValuation(String variableName) {
